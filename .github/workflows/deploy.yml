@@ -21,41 +21,39 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies — SkillForge
-        run: cd websites/website-03-skillforge && npm ci
 
       - name: Build SkillForge
-        run: cd websites/website-03-skillforge && npm run build
-
-      - name: Install dependencies — Apex Fitness
-        run: cd websites/website-04-apex-fitness && npm ci
+        run: |
+          cd websites/website-03-skillforge
+          npm ci
+          npm run build
 
       - name: Build Apex Fitness
-        run: cd websites/website-04-apex-fitness && npm run build
-
-      - name: Install dependencies — FrameWorth
-        run: cd websites/website-05-frameworth && npm ci
+        run: |
+          cd websites/website-04-apex-fitness
+          npm ci
+          npm run build
 
       - name: Build FrameWorth
-        run: cd websites/website-05-frameworth && npm run build
+        run: |
+          cd websites/website-05-frameworth
+          npm ci
+          npm run build
 
-      - name: Prepare combined dist directory
+      - name: Prepare combined site directory
         run: |
           mkdir -p _site
-          # Copy each site's dist with proper base path handling
           cp -r websites/website-03-skillforge/dist/* _site/skillforge/
           cp -r websites/website-04-apex-fitness/dist/* _site/apex-fitness/
           cp -r websites/website-05-frameworth/dist/* _site/frameworth/
-          echo "Site contents:"
+          echo "=== Site structure ==="
           ls _site/
-          ls _site/skillforge/ 2>/dev/null | head -5
-          ls _site/apex-fitness/ 2>/dev/null | head -5
-          ls _site/frameworth/ 2>/dev/null | head -5
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v4
+          echo "--- SkillForge ---"
+          ls _site/skillforge/ | head -5
+          echo "--- Apex Fitness ---"
+          ls _site/apex-fitness/ | head -5
+          echo "--- FrameWorth ---"
+          ls _site/frameworth/ | head -5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
