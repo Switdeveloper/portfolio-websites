@@ -1,0 +1,281 @@
+{
+  "name": "Option B: Curated Queue Auto-Post (Facebook & Instagram)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "triggerAtHour": 7 },
+            { "triggerAtHour": 12 },
+            { "triggerAtHour": 18 }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Schedule Trigger (3x/day)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "sheetId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "range": "Sheet1!A2:F20",
+        "options": {
+          "outputFormatting": {
+            "general": "detectAutomatically"
+          }
+        }
+      },
+      "id": "node-sheets-read",
+      "name": "Read Content Queue (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [300, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-creds",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find the next unposted row\nconst rows = $('Read Content Queue (Google Sheets)').all();\nconst nextRow = rows.find(r => r.json.Status !== 'Posted' && r.json.Caption && r.json.ImageUrl);\n\nif (!nextRow) {\n  return []; // No pending posts — graceful stop\n}\n\nreturn [nextRow];"
+      },
+      "id": "node-queue-filter",
+      "name": "Get Next Unposted Item (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quality gate: validate content before posting\nconst item = $('Get Next Unposted Item (Code)').first().json;\n\nconst issues = [];\nif (!item.Caption || item.Caption.length < 10) issues.push('Caption too short');\nif (!item.ImageUrl || !item.ImageUrl.startsWith('http')) issues.push('Invalid image URL');\n\nreturn [{\n  json: {\n    passed: issues.length === 0,\n    issues: issues.join('; '),\n    row: item,\n    caption: item.Caption || '',\n    imageUrl: item.ImageUrl || '',\n    rowIndex: item.__rowIndex\n  }\n}];"
+      },
+      "id": "node-quality-gate",
+      "name": "Quality Gate (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "pass-check",
+              "leftValue": "={{ $json.passed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-quality",
+      "name": "IF — Quality Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "hostUrl": {
+          "__rl": true,
+          "mode": "list",
+          "value": "default"
+        },
+        "httpMethod": {
+          "__rl": true,
+          "mode": "list",
+          "value": "POST"
+        },
+        "node": "/me/photos",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}"
+        },
+        "binaryData": false,
+        "urlHash": "={{ $json.imageUrl }}",
+        "options": {}
+      },
+      "id": "node-facebook",
+      "name": "Facebook Graph API — Post",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [1100, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "publish",
+        "hostUrl": {
+          "__rl": true,
+          "mode": "list",
+          "value": "instagram"
+        },
+        "httpMethod": {
+          "__rl": true,
+          "mode": "list",
+          "value": "POST"
+        },
+        "node": "/me/media",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "mediaType": "IMAGE",
+          "imageUrl": "={{ $json.imageUrl }}"
+        },
+        "options": {}
+      },
+      "id": "node-instagram",
+      "name": "Instagram Graph API — Post",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [1100, 420],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate results for reporting\nconst fb = $('Facebook Graph API — Post').first().json;\nconst ig = $('Instagram Graph API — Post').first().json;\nconst item = $('Quality Gate (Code)').first().json;\n\nconst results = {\n  facebookPosted: !fb.error,\n  facebookId: fb.id || null,\n  facebookError: fb.error || null,\n  instagramPosted: !ig.error,\n  instagramId: ig.id || null,\n  instagramError: ig.error || null,\n  caption: item.caption.substring(0, 100),\n  rowIndex: item.rowIndex,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: results\n}];"
+      },
+      "id": "node-aggregate",
+      "name": "Aggregate Results (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "sheetId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "range": "Sheet1!A2",
+        "updateColumnField1": "Status",
+        "updateValue1": "=Posted",
+        "options": {
+          "rowsAbove": false
+        }
+      },
+      "id": "node-sheets-mark",
+      "name": "Mark Row as Posted (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1500, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-creds",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5039241656",
+        "message": "=📬 *Curated Queue Post Report*\\n\\n⏰ {{ $json.timestamp }}\\n✅ *Facebook:* {{ $json.facebookPosted ? 'Posted (ID: ' + $json.facebookId + ')' : 'FAILED: ' + $json.facebookError }}\\n✅ *Instagram:* {{ $json.instagramPosted ? 'Posted (ID: ' + $json.instagramId + ')' : 'FAILED: ' + $json.instagramError }}\\n\\n📝 \"{{ $json.caption }}...\"\\n\\n✅ Row marked as Posted in Sheets."
+      },
+      "id": "node-telegram",
+      "name": "Telegram — Success Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1700, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-creds",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5039241656",
+        "message": "=⚠️ *Quality Gate Failed*\\n\\nRow {{ $json.rowIndex }}\\n❌ Issues: {{ $json.issues }}\\n📝 Caption: {{ $json.caption }}\\n\\n⏭️ Skipped — needs manual review."
+      },
+      "id": "node-telegram-fail",
+      "name": "Telegram — Quality Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 600],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-creds",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Auto-retry: increment retry count and re-queue if failed\nconst item = $('Quality Gate (Code)').first().json;\nconst results = $('Aggregate Results (Code)').first().json;\n\nconst fbFailed = !results.facebookPosted;\nconst igFailed = !results.instagramPosted;\n\nif (fbFailed || igFailed) {\n  const retryCount = (parseInt(item.row?.RetryCount || '0') || 0) + 1;\n  return [{\n    json: {\n      rowIndex: item.rowIndex,\n      retryCount: retryCount,\n      message: `Retry ${retryCount}/3 — Facebook: ${results.facebookPosted}, Instagram: ${results.instagramPosted}`\n    }\n  }];\n}\nreturn [];"
+      },
+      "id": "node-auto-retry",
+      "name": "Auto-Retry Check (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (3x/day)": {
+      "main": [[{ "node": "Read Content Queue (Google Sheets)", "type": "main", "index": 0 }]]
+    },
+    "Read Content Queue (Google Sheets)": {
+      "main": [[{ "node": "Get Next Unposted Item (Code)", "type": "main", "index": 0 }]]
+    },
+    "Get Next Unposted Item (Code)": {
+      "main": [[{ "node": "Quality Gate (Code)", "type": "main", "index": 0 }]]
+    },
+    "Quality Gate (Code)": {
+      "main": [[{ "node": "IF — Quality Passed?", "type": "main", "index": 0 }]]
+    },
+    "IF — Quality Passed?": {
+      "main": [
+        [{ "node": "Facebook Graph API — Post", "type": "main", "index": 0 }],
+        [{ "node": "Telegram — Quality Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Facebook Graph API — Post": {
+      "main": [[{ "node": "Aggregate Results (Code)", "type": "main", "index": 0 }]]
+    },
+    "Instagram Graph API — Post": {
+      "main": [[{ "node": "Aggregate Results (Code)", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Results (Code)": {
+      "main": [
+        [{ "node": "Mark Row as Posted (Google Sheets)", "type": "main", "index": 0 }],
+        [{ "node": "Auto-Retry Check (Code)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Row as Posted (Google Sheets)": {
+      "main": [[{ "node": "Telegram — Success Report", "type": "main", "index": 0 }]]
+    },
+    "Auto-Retry Check (Code)": {
+      "main": [[{ "node": "Telegram — Success Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "active": false
+}

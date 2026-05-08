@@ -1,0 +1,25 @@
+# Environment variables (contain secrets)
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# n8n
+.credentials/
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (if using any node packages)
+node_modules/
+
+# Secrets — any file containing actual API keys or tokens
+# Will be caught by GitHub secret scanning but better to avoid committing
+*.key
+secrets.json
+credentials.json

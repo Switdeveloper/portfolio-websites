@@ -1,0 +1,405 @@
+{
+  "name": "Option A: AI-Powered Auto-Post (Facebook & Instagram)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            },
+            {
+              "triggerAtHour": 14
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Schedule Trigger (2x/day)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Topic pool for AI to generate from\nconst topicPool = [\n  { category: 'productivity', prompt: 'Share a productivity tip for busy professionals' },\n  { category: 'behind-scenes', prompt: 'Give a behind-the-scenes look at your industry' },\n  { category: 'customer-story', prompt: 'Highlight a customer success story or testimonial' },\n  { category: 'how-to', prompt: 'Share a quick how-to or tutorial relevant to your audience' },\n  { category: 'industry-news', prompt: 'Discuss a trending topic or news in your industry' },\n  { category: 'motivation', prompt: 'Post an inspiring or motivational message' },\n  { category: 'fun-fact', prompt: 'Share an interesting or fun fact about your niche' },\n  { category: 'feature-spotlight', prompt: 'Showcase a product feature or service you offer' }\n];\n\nconst imagePool = [\n  'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=1200',\n  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200',\n  'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200',\n  'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1200',\n  'https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200',\n  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200'\n];\n\nconst selected = topicPool[Math.floor(Math.random() * topicPool.length)];\nconst image = imagePool[Math.floor(Math.random() * imagePool.length)];\n\nreturn [{\n  json: {\n    topic: selected.category,\n    aiPrompt: selected.prompt,\n    imageUrl: image,\n    scheduledTime: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-content-planner",
+      "name": "Content Planner (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.grok.x.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{GROK_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "grok-2"
+            },
+            {
+              "name": "max_tokens",
+              "value": "300"
+            },
+            {
+              "name": "temperature",
+              "value": "0.8"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\":\"system\",\"content\":\"You are a social media copywriter. Given a topic, generate a compelling Instagram/Facebook post caption. Include an opening hook, 2-3 sentences of engaging content, a call-to-action, and 5 relevant hashtags. Keep it conversational and authentic.\"},{\"role\":\"user\",\"content\":\"={{ $json.aiPrompt }}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-grok-caption",
+      "name": "Grok AI \u2014 Caption Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.grok.x.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{GROK_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "grok-2"
+            },
+            {
+              "name": "max_tokens",
+              "value": "100"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\":\"system\",\"content\":\"You are an image prompt engineer. Given a topic, write a short, vivid image generation prompt (max 80 words) for an Unsplash-style photo. Describe the scene, mood, lighting, and composition. Output ONLY the prompt, nothing else.\"},{\"role\":\"user\",\"content\":\"Generate an image prompt for: {{ $json.aiPrompt }}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-grok-image-prompt",
+      "name": "Grok AI \u2014 Image Prompt Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Grok responses and build final post object\nconst captionRaw = $('Grok AI \u2014 Caption Generator').item.json.choices?.[0]?.message?.content || '';\nconst imagePromptRaw = $('Grok AI \u2014 Image Prompt Generator').item.json.choices?.[0]?.message?.content || '';\n\n// Try to find an Unsplash image matching the prompt keyword\nconst keywords = imagePromptRaw.split(' ').filter(w => w.length > 4).slice(0, 3).join(',');\nconst imageUrl = $('Content Planner (Code)').item.json.imageUrl;\n\nconst post = {\n  caption: captionRaw.trim(),\n  imageUrl: imageUrl,\n  topic: $('Content Planner (Code)').item.json.topic,\n  imagePrompt: imagePromptRaw.trim()\n};\n\nreturn [{\n  json: post\n}];"
+      },
+      "id": "node-assemble",
+      "name": "Assemble Post (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "hostUrl": {
+          "__rl": true,
+          "mode": "list",
+          "value": "default"
+        },
+        "httpMethod": {
+          "__rl": true,
+          "mode": "list",
+          "value": "POST"
+        },
+        "node": "/me/photos",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}"
+        },
+        "binaryData": false,
+        "urlHash": "={{ $json.imageUrl }}",
+        "options": {}
+      },
+      "id": "node-facebook",
+      "name": "Facebook Graph API \u2014 Create Post",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "publish",
+        "hostUrl": {
+          "__rl": true,
+          "mode": "list",
+          "value": "instagram"
+        },
+        "httpMethod": {
+          "__rl": true,
+          "mode": "list",
+          "value": "POST"
+        },
+        "node": "/me/media",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "mediaType": "IMAGE",
+          "imageUrl": "={{ $json.imageUrl }}"
+        },
+        "options": {}
+      },
+      "id": "node-instagram",
+      "name": "Instagram Graph API \u2014 Create Media",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate results and prepare log entry\nconst fb = $('Facebook Graph API \u2014 Create Post').first().json;\nconst ig = $('Instagram Graph API \u2014 Create Media').first().json;\nconst post = $('Assemble Post (Code)').first().json;\n\nconst results = {\n  facebook: {\n    posted: !fb.error,\n    id: fb.id || null,\n    error: fb.error || null\n  },\n  instagram: {\n    posted: !ig.error,\n    id: ig.id || null,\n    error: ig.error || null\n  },\n  caption: post.caption,\n  topic: post.topic,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: results\n}];"
+      },
+      "id": "node-aggregate",
+      "name": "Aggregate Results (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "range": "Sheet1!A1",
+        "addAnother": true,
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Topic": "={{ $json.topic }}",
+            "Caption": "={{ $json.caption }}",
+            "Facebook Posted": "={{ $json.facebook.posted }}",
+            "Facebook ID": "={{ $json.facebook.id }}",
+            "Facebook Error": "={{ $json.facebook.error }}",
+            "Instagram Posted": "={{ $json.instagram.posted }}",
+            "Instagram ID": "={{ $json.instagram.id }}",
+            "Instagram Error": "={{ $json.instagram.error }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-sheets-log",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        1300,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-creds",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5039241656",
+        "message": "=\ud83d\udcca *Auto-Post Report*\\n\\n\u23f0 Time: {{ $json.timestamp }}\\n\ud83d\udccc Topic: {{ $json.topic }}\\n\\n\u2705 *Facebook:* {{ $json.facebook.posted ? 'Posted (' + $json.facebook.id + ')' : 'FAILED: ' + $json.facebook.error }}\\n\u2705 *Instagram:* {{ $json.instagram.posted ? 'Posted (' + $json.instagram.id + ')' : 'FAILED: ' + $json.instagram.error }}\\n\\n\ud83d\udcdd *Caption:*\\n{{ $json.caption.substring(0, 200) }}..."
+      },
+      "id": "node-telegram",
+      "name": "Telegram Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-creds",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (2x/day)": {
+      "main": [
+        [
+          {
+            "node": "Content Planner (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Planner (Code)": {
+      "main": [
+        [
+          {
+            "node": "Grok AI \u2014 Caption Generator",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Grok AI \u2014 Image Prompt Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grok AI \u2014 Caption Generator": {
+      "main": [
+        [
+          {
+            "node": "Assemble Post (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grok AI \u2014 Image Prompt Generator": {
+      "main": [
+        [
+          {
+            "node": "Assemble Post (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Post (Code)": {
+      "main": [
+        [
+          {
+            "node": "Facebook Graph API \u2014 Create Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Instagram Graph API \u2014 Create Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook Graph API \u2014 Create Post": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Graph API \u2014 Create Media": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results (Code)": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "active": false
+}
