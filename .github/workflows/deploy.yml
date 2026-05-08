@@ -42,10 +42,10 @@ jobs:
 
       - name: Prepare combined site directory
         run: |
-          mkdir -p _site
-          cp -r websites/website-03-skillforge/dist/* _site/skillforge/
-          cp -r websites/website-04-apex-fitness/dist/* _site/apex-fitness/
-          cp -r websites/website-05-frameworth/dist/* _site/frameworth/
+          mkdir -p _site/skillforge _site/apex-fitness _site/frameworth
+          cp -r websites/website-03-skillforge/dist/. _site/skillforge/
+          cp -r websites/website-04-apex-fitness/dist/. _site/apex-fitness/
+          cp -r websites/website-05-frameworth/dist/. _site/frameworth/
           echo "=== Site structure ==="
           ls _site/
           echo "--- SkillForge ---"
