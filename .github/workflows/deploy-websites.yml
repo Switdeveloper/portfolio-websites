@@ -1,0 +1,47 @@
+name: Deploy Websites
+
+on:
+  push:
+    branches: [main, gh-pages]
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            websites/website-03-skillforge/package-lock.json
+            websites/website-04-apex-fitness/package-lock.json
+            websites/website-05-frameworth/package-lock.json
+
+      - name: Build Website 3 — SkillForge
+        run: |
+          cd websites/website-03-skillforge
+          npm ci
+          npm run build
+
+      - name: Build Website 4 — Apex Fitness
+        run: |
+          cd websites/website-04-apex-fitness
+          npm ci
+          npm run build
+
+      - name: Build Website 5 — FrameWorth
+        run: |
+          cd websites/website-05-frameworth
+          npm ci
+          npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-ghpages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./websites
+          destination_dir: websites

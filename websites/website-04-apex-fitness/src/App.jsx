@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import BackToTop from './components/BackToTop'
@@ -11,7 +11,7 @@ import Contact from './pages/Contact'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-1">
@@ -27,6 +27,6 @@ export default function App() {
         <Footer />
         <BackToTop />
       </div>
-    </BrowserRouter>
+    </HashRouter>
   )
 }

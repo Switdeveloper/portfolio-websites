@@ -1,0 +1,67 @@
+name: Deploy All Websites to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies — SkillForge
+        run: cd websites/website-03-skillforge && npm ci
+
+      - name: Build SkillForge
+        run: cd websites/website-03-skillforge && npm run build
+
+      - name: Install dependencies — Apex Fitness
+        run: cd websites/website-04-apex-fitness && npm ci
+
+      - name: Build Apex Fitness
+        run: cd websites/website-04-apex-fitness && npm run build
+
+      - name: Install dependencies — FrameWorth
+        run: cd websites/website-05-frameworth && npm ci
+
+      - name: Build FrameWorth
+        run: cd websites/website-05-frameworth && npm run build
+
+      - name: Prepare combined dist directory
+        run: |
+          mkdir -p _site
+          # Copy each site's dist with proper base path handling
+          cp -r websites/website-03-skillforge/dist/* _site/skillforge/
+          cp -r websites/website-04-apex-fitness/dist/* _site/apex-fitness/
+          cp -r websites/website-05-frameworth/dist/* _site/frameworth/
+          echo "Site contents:"
+          ls _site/
+          ls _site/skillforge/ 2>/dev/null | head -5
+          ls _site/apex-fitness/ 2>/dev/null | head -5
+          ls _site/frameworth/ 2>/dev/null | head -5
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
